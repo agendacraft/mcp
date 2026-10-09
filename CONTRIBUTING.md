@@ -55,12 +55,15 @@ During 0.x development, a minor release may change a tool, input, auth, or confi
 document such changes in `CHANGELOG.md`. Patch releases preserve those contracts. Package and MCP
 identity versions must match. This repository is the source of truth for the MCP implementation.
 
-Publishing is manual only, from `main`, through the `npm-release` environment. Before the first
-release the captain must verify the [private security reporting channel](SECURITY.md), public visibility
-review, npm scope/package bootstrap and trusted-publisher setup, branch/tag protection, and release
+Publishing requires a maintainer to manually dispatch `.github/workflows/publish.yml` from `main`
+and enter `@agendacraft/mcp` as confirmation. The workflow rejects any other event, branch, or
+confirmation before verification and uses the `npm-release` environment for publishing. Repository
+visibility does not authorize a release. Before the first release the captain must verify the
+[private security reporting channel](SECURITY.md), public release review, npm scope/package
+bootstrap and trusted-publisher setup, branch/tag protection, and release
 environment approval rules. CI requires no npm token. Configure the npm trusted publisher for this
 repository and `.github/workflows/publish.yml`; the release job uses OIDC and provenance.
-Do not dispatch publishing while the repository is staged privately.
+The repository is a pre-release; do not dispatch publishing until maintainer review is complete.
 
 ## Developer Certificate of Origin
 

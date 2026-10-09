@@ -9,11 +9,26 @@ on:
 permissions:
   contents: read
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require explicit maintainer release
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$RELEASE_EVENT" != workflow_dispatch ] ||
+             [ "$RELEASE_REF" != refs/heads/main ] ||
+             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ]; then
+            echo 'A maintainer must manually dispatch a reviewed release from main and confirm @agendacraft/mcp.' >&2
+            exit 1
+          fi
   verify:
+    needs: authorize
     uses: ./.github/workflows/ci.yml
   publish:
     needs: verify
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == '@agendacraft/mcp'
     runs-on: ubuntu-latest
     environment: npm-release
     permissions:
@@ -23,11 +38,8 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - name: Require completion of private staging
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Require security reporting channel
         run: |
-          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .visibility)" = public
           if grep -q 'TODO for the captain' SECURITY.md; then
             echo 'Complete and verify the private reporting channel before releasing.' >&2
             exit 1

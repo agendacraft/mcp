@@ -4,9 +4,8 @@ Connect an MCP host to your AgendaCraft calendar and tasks through the AgendaCra
 The server exposes profile and agenda reads, task writes, and project, area, and Time Window
 management. OAuth scopes control the tools and resources available to each connection.
 
-**Release status:** this repository is staged for review. The first npm release is pending.
-Use a source checkout until a maintainer announces a release. The intended npm name is
-`@agendacraft/mcp`.
+**Pre-release:** `@agendacraft/mcp` is not yet published to npm. Use a source checkout for now.
+The `npx` installation commands below will work after the first release.
 
 ## Requirements
 
