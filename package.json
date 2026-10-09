@@ -1,0 +1,71 @@
+{
+  "name": "@agendacraft/mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AgendaCraft MCP server (Model Context Protocol over the agenda-service HTTP API).",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "bin": {
+    "agenda-mcp": "dist/index.js",
+    "agendacraft-mcp": "dist/index.js",
+    "mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.js.LEGAL.txt",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "agendacraft",
+    "claude",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "login": "tsx src/index.ts login",
+    "build": "node esbuild.config.mjs",
+    "prepack": "node esbuild.config.mjs",
+    "start": "node dist/index.js",
+    "lint": "node scripts/lint.mjs",
+    "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate:api": "node scripts/generate-api.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:pack": "node scripts/test-pack.mjs",
+    "notices": "node scripts/third-party-notices.mjs"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "dayjs": "^1.11.11",
+    "esbuild": "^0.28.2",
+    "express": "^5.2.1",
+    "oxlint": "1.51.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.11",
+    "zod": "^3.25.0",
+    "prettier": "3.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agendacraft/mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agendacraft/mcp/issues"
+  },
+  "homepage": "https://github.com/agendacraft/mcp#readme",
+  "packageManager": "pnpm@11.2.2"
+}
