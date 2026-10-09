@@ -56,7 +56,7 @@ document such changes in `CHANGELOG.md`. Patch releases preserve those contracts
 identity versions must match. This repository is the source of truth for the MCP implementation.
 
 Publishing is manual only, from `main`, through the `npm-release` environment. Before the first
-release the captain must complete the private security reporting channel, public visibility
+release the captain must verify the [private security reporting channel](SECURITY.md), public visibility
 review, npm scope/package bootstrap and trusted-publisher setup, branch/tag protection, and release
 environment approval rules. CI requires no npm token. Configure the npm trusted publisher for this
 repository and `.github/workflows/publish.yml`; the release job uses OIDC and provenance.
