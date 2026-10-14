@@ -14,7 +14,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { createAgendaClient, type AgendaApiClient } from "./apiClient";
 import { type HostedSettings, metadataUrl } from "./config";
 import { createMcpServer } from "./server";
-import { fetchWithRetry } from "./oauth";
+import { fetchWithRetry, requireOAuthMetadataUrl } from "./oauth";
 import {
   HostedAuthError,
   introspectBearerToken,
@@ -109,15 +109,7 @@ async function fetchOAuthMetadata(
   }
   for (const [field, value] of Object.entries(parsed.data)) {
     if (field !== "issuer" && !field.endsWith("_endpoint") && field !== "jwks_uri") continue;
-    let url: URL;
-    try {
-      url = new URL(String(value));
-    } catch {
-      throw new Error(`OAuth metadata ${field} must be an absolute HTTPS URL.`);
-    }
-    if (typeof value !== "string" || url.protocol !== "https:") {
-      throw new Error(`OAuth metadata ${field} must use HTTPS.`);
-    }
+    requireOAuthMetadataUrl(value, field);
   }
   return parsed.data;
 }

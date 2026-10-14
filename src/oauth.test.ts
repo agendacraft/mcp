@@ -60,6 +60,41 @@ describe("metadataFromPayload", () => {
     expect(parsed).toEqual(metadata);
   });
 
+  it.each(["authorization_endpoint", "token_endpoint", "issuer"])(
+    "rejects insecure or non-absolute discovery %s values",
+    (field) => {
+      for (const value of [
+        "http://remote.example/oauth",
+        "//auth.example/oauth",
+        "/relative",
+        "javascript:void(0)",
+        "http://localhost.attacker.example/oauth",
+      ]) {
+        expect(() =>
+          metadataFromPayload({
+            issuer: "https://auth.example",
+            authorization_endpoint: "https://auth.example/authorize",
+            token_endpoint: "https://auth.example/token",
+            [field]: value,
+          })
+        ).toThrow(OAuthError);
+      }
+    }
+  );
+
+  it.each(["127.0.0.1", "localhost", "[::1]"])(
+    "allows explicit HTTP loopback discovery endpoints at %s",
+    (host) => {
+      const parsed = metadataFromPayload({
+        issuer: `http://${host}:8765`,
+        authorization_endpoint: `http://${host}:8765/authorize`,
+        token_endpoint: `http://${host}:8765/token`,
+      });
+
+      expect(parsed.tokenEndpoint).toBe(`http://${host}:8765/token`);
+    }
+  );
+
   it("throws when the token endpoint is missing", () => {
     expect(() =>
       metadataFromPayload({ authorization_endpoint: "https://api.agendacraft.ai/o/authorize/" })
@@ -68,6 +103,29 @@ describe("metadataFromPayload", () => {
 });
 
 describe("buildAuthorizationUrl", () => {
+  it("preserves endpoint query values while adding the required OAuth parameters", () => {
+    const url = new URL(
+      buildAuthorizationUrl(
+        {
+          ...metadata,
+          authorizationEndpoint: "https://auth.example/authorize?audience=api&state=old",
+        },
+        {
+          clientId: "fixture-client",
+          redirectUri: "http://127.0.0.1/callback",
+          scope: "agenda:read",
+          state: "fresh",
+          codeChallenge: "fixture-challenge",
+        }
+      )
+    );
+
+    expect(url.searchParams.get("audience")).toBe("api");
+    expect(url.searchParams.get("response_type")).toBe("code");
+    expect(url.searchParams.getAll("state")).toEqual(["fresh"]);
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  });
+
   it("includes the PKCE and consent query parameters", () => {
     const url = new URL(
       buildAuthorizationUrl(metadata, {

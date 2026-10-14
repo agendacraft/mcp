@@ -82,20 +82,54 @@ export function generateState(): string {
   return randomBytes(24).toString("base64url");
 }
 
+export function requireOAuthMetadataUrl(
+  value: unknown,
+  field: string,
+  options: { readonly allowLoopbackHttp?: boolean } = {}
+): string {
+  if (typeof value !== "string" || value === "") {
+    throw new OAuthError(`OAuth metadata is missing a valid ${field}.`);
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new OAuthError(`OAuth metadata ${field} must be an absolute URL.`);
+  }
+  const loopbackHttp =
+    options.allowLoopbackHttp === true &&
+    url.protocol === "http:" &&
+    ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
+  if (
+    (url.protocol !== "https:" && !loopbackHttp) ||
+    url.username ||
+    url.password ||
+    url.href.includes("#")
+  ) {
+    throw new OAuthError(
+      `OAuth metadata ${field} must use HTTPS without credentials or fragments.`
+    );
+  }
+  return value;
+}
+
 export function metadataFromPayload(payload: JsonObject): AuthServerMetadata {
-  const authorizationEndpoint = payload["authorization_endpoint"];
-  const tokenEndpoint = payload["token_endpoint"];
-  if (typeof authorizationEndpoint !== "string" || authorizationEndpoint === "") {
-    throw new OAuthError("Authorization server metadata is missing 'authorization_endpoint'.");
-  }
-  if (typeof tokenEndpoint !== "string" || tokenEndpoint === "") {
-    throw new OAuthError("Authorization server metadata is missing 'token_endpoint'.");
-  }
-  const issuer = payload["issuer"];
+  const localOptions = { allowLoopbackHttp: true };
   return {
-    issuer: typeof issuer === "string" ? issuer : "",
-    authorizationEndpoint,
-    tokenEndpoint,
+    issuer:
+      payload["issuer"] === undefined
+        ? ""
+        : requireOAuthMetadataUrl(payload["issuer"], "issuer", localOptions),
+    authorizationEndpoint: requireOAuthMetadataUrl(
+      payload["authorization_endpoint"],
+      "authorization_endpoint",
+      localOptions
+    ),
+    tokenEndpoint: requireOAuthMetadataUrl(
+      payload["token_endpoint"],
+      "token_endpoint",
+      localOptions
+    ),
   };
 }
 
@@ -120,7 +154,9 @@ export function buildAuthorizationUrl(
     code_challenge: params.codeChallenge,
     code_challenge_method: "S256",
   });
-  return `${metadata.authorizationEndpoint}?${query.toString()}`;
+  const endpoint = new URL(metadata.authorizationEndpoint);
+  for (const [name, value] of query) endpoint.searchParams.set(name, value);
+  return endpoint.toString();
 }
 
 export function tokenBundleFromResponse(payload: JsonObject, nowMs: number): TokenBundle {
