@@ -12,21 +12,25 @@ jobs:
   authorize:
     runs-on: ubuntu-latest
     steps:
-      - name: Require explicit maintainer release
+      - &release-authorization
+        name: Require explicit maintainer release
         env:
           RELEASE_EVENT: ${{ github.event_name }}
           RELEASE_REF: ${{ github.ref }}
           RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
-          RELEASE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
           RELEASE_ACTOR: ${{ github.actor }}
           RELEASE_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$RELEASE_EVENT" != workflow_dispatch ] ||
              [ "$RELEASE_REF" != refs/heads/main ] ||
-             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ] ||
-             [ "$RELEASE_REPOSITORY_PRIVATE" != false ]; then
+             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ]; then
             echo 'An admin must manually dispatch a reviewed release from main in a public repository and confirm @agendacraft/mcp.' >&2
+            exit 1
+          fi
+          if ! private=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private') ||
+             [ "$private" != false ]; then
+            echo 'npm provenance requires a currently public source repository.' >&2
             exit 1
           fi
           for actor in "$RELEASE_ACTOR" "$RELEASE_TRIGGERING_ACTOR"; do
@@ -63,4 +67,5 @@ jobs:
       - run: npm install --global pnpm@11.2.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - *release-authorization
       - run: npm publish --provenance --access public
