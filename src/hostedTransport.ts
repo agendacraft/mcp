@@ -14,6 +14,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { createAgendaClient, type AgendaApiClient } from "./apiClient";
 import { type HostedSettings, metadataUrl } from "./config";
 import { createMcpServer } from "./server";
+import { fetchWithRetry } from "./oauth";
 import {
   HostedAuthError,
   introspectBearerToken,
@@ -91,13 +92,13 @@ async function fetchOAuthMetadata(
   settings: HostedSettings,
   fetchImpl: FetchLike = fetch
 ): Promise<OAuthMetadata> {
-  const response = await fetchImpl(
+  const response = await fetchWithRetry(
     metadataUrl({ ...settings, agendaServiceUrl: settings.authorizationServerUrl }),
     {
       method: "GET",
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(settings.requestTimeoutMs),
-    }
+    },
+    { fetchImpl, timeoutMs: settings.requestTimeoutMs }
   );
   if (response.status !== 200) {
     throw new Error(`OAuth metadata discovery returned ${response.status}.`);

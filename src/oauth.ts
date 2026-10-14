@@ -194,7 +194,7 @@ function defaultSleep(ms: number): Promise<void> {
  * `Retry-After` backoff, as required for the auth path (repo rule: outbound
  * calls handle `429` / `Retry-After`).
  */
-async function fetchWithRetry(
+export async function fetchWithRetry(
   url: string,
   init: RequestInit,
   options: FetchOptions
@@ -294,8 +294,8 @@ export interface RefreshTokenOptions extends FetchOptions {
   readonly nowMs: number;
 }
 
-export function refreshAccessToken(options: RefreshTokenOptions): Promise<TokenBundle> {
-  return requestToken(
+export async function refreshAccessToken(options: RefreshTokenOptions): Promise<TokenBundle> {
+  const bundle = await requestToken(
     options.tokenEndpoint,
     {
       grant_type: "refresh_token",
@@ -304,6 +304,7 @@ export function refreshAccessToken(options: RefreshTokenOptions): Promise<TokenB
     },
     options
   );
+  return { ...bundle, refreshToken: bundle.refreshToken ?? options.refreshToken };
 }
 
 /** Persists the token bundle to an owner-only JSON file. */

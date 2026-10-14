@@ -36,6 +36,75 @@ function metadataResponse(): Response {
 }
 
 describe("createHostedApp", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("starts after throttled discovery and preserves the advertised OAuth metadata", async () => {
+    vi.useFakeTimers();
+    const signals: Array<AbortSignal | null | undefined> = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+      signals.push(init?.signal);
+      return signals.length === 1
+        ? new Response("", { status: 429, headers: { "Retry-After": "2" } })
+        : metadataResponse();
+    });
+
+    const pending = createHostedApp(hostedSettings(), { fetchImpl });
+    const outcome = pending.then(
+      (app) => ({ app }),
+      (error) => ({ error })
+    );
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await outcome;
+
+    expect(result).toHaveProperty("app");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
+    expect(signals[0]).not.toBe(signals[1]);
+    vi.useRealTimers();
+    const app = await pending;
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => server.once("listening", resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const response = await fetch(
+        `http://127.0.0.1:${port}/.well-known/oauth-authorization-server`
+      );
+      expect(await response.json()).toEqual(await metadataResponse().json());
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
+    }
+  });
+
+  it.each(["999999", "invalid"])(
+    "stops throttled discovery after bounded waits for Retry-After %s",
+    async (retryAfter) => {
+      vi.useFakeTimers();
+      const fetchImpl = vi.fn<typeof fetch>(
+        async () =>
+          new Response("", {
+            status: 429,
+            headers: { "Retry-After": retryAfter },
+          })
+      );
+
+      const pending = createHostedApp(hostedSettings(), { fetchImpl });
+      const outcome = pending.then(
+        () => undefined,
+        (error) => error
+      );
+      await vi.advanceTimersByTimeAsync(89_999);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await outcome).toMatchObject({ message: expect.stringContaining("429") });
+      expect(fetchImpl).toHaveBeenCalledTimes(4);
+    }
+  );
+
   it("serves health, protected-resource metadata, and auth challenges", async () => {
     const fetchImpl = (async () => metadataResponse()) as typeof fetch;
     const app = await createHostedApp(hostedSettings(), { fetchImpl });

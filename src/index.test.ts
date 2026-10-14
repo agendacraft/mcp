@@ -83,10 +83,53 @@ describe("buildAccessTokenProvider", () => {
     expect(await provider()).toBe("fresh");
     expect((await store.load())?.accessToken).toBe("fresh");
     expect((await store.load())?.scope).toBe("profile:read");
+    expect((await store.load())?.refreshToken).toBe("rt2");
     expect(signals).toHaveLength(2);
     expect(signals[0]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).toBeInstanceOf(AbortSignal);
     expect(signals[0]).not.toBe(signals[1]);
+  });
+
+  it("keeps a non-rotated refresh token usable across successive expiries", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-cli-"));
+    const tokenPath = join(dir, "token.json");
+    const store = new TokenStore(tokenPath);
+    await store.save(
+      tokenBundleFromResponse(
+        {
+          access_token: "old",
+          refresh_token: "fixture-refresh",
+          expires_in: 1,
+          scope: "agenda:read",
+        },
+        0
+      )
+    );
+    let nowMs = 100_000;
+    const refreshTokens: string[] = [];
+    const fetchImpl = (async (input, init) => {
+      if (String(input).endsWith("/.well-known/oauth-authorization-server")) {
+        return jsonResponse({
+          authorization_endpoint: "https://api.agendacraft.ai/o/authorize/",
+          token_endpoint: "https://api.agendacraft.ai/o/token/",
+        });
+      }
+      refreshTokens.push(new URLSearchParams(String(init?.body)).get("refresh_token")!);
+      return jsonResponse({ access_token: "fresh", expires_in: 60 });
+    }) as typeof fetch;
+    const provider = buildAccessTokenProvider(settingsWith(tokenPath), {
+      store,
+      fetchImpl,
+      now: () => nowMs,
+    });
+
+    expect(await provider()).toBe("fresh");
+    expect((await store.load())?.refreshToken).toBe("fixture-refresh");
+    nowMs += 100_000;
+    expect(await provider()).toBe("fresh");
+
+    expect(refreshTokens).toEqual(["fixture-refresh", "fixture-refresh"]);
+    expect((await store.load())?.scope).toBe("agenda:read");
   });
 
   it("throws when no token is cached", async () => {
