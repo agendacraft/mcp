@@ -22,7 +22,7 @@ function hostedSettings(): HostedSettings {
   };
 }
 
-function metadataResponse(): Response {
+function metadataResponse(overrides: Record<string, unknown> = {}): Response {
   return new Response(
     JSON.stringify({
       issuer: "https://app.agendacraft.ai",
@@ -30,6 +30,7 @@ function metadataResponse(): Response {
       token_endpoint: "https://app.agendacraft.ai/o/token/",
       introspection_endpoint: "https://app.agendacraft.ai/o/introspect/",
       response_types_supported: ["code"],
+      ...overrides,
     }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );
@@ -102,6 +103,35 @@ describe("createHostedApp", () => {
 
       expect(await outcome).toMatchObject({ message: expect.stringContaining("429") });
       expect(fetchImpl).toHaveBeenCalledTimes(4);
+    }
+  );
+
+  it.each([
+    "issuer",
+    "authorization_endpoint",
+    "token_endpoint",
+    "registration_endpoint",
+    "introspection_endpoint",
+    "revocation_endpoint",
+    "device_authorization_endpoint",
+    "jwks_uri",
+  ])("refuses to advertise an insecure %s", async (field) => {
+    const fetchImpl = (async () =>
+      metadataResponse({ [field]: "http://auth.example/unsafe" })) as typeof fetch;
+
+    await expect(createHostedApp(hostedSettings(), { fetchImpl })).rejects.toThrow(
+      /OAuth metadata/
+    );
+  });
+
+  it.each(["issuer", "authorization_endpoint", "token_endpoint", "response_types_supported"])(
+    "refuses incomplete discovery without %s",
+    async (field) => {
+      const fetchImpl = (async () => metadataResponse({ [field]: undefined })) as typeof fetch;
+
+      await expect(createHostedApp(hostedSettings(), { fetchImpl })).rejects.toThrow(
+        /OAuth metadata/
+      );
     }
   );
 

@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 
-import type { OAuthMetadata } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { OAuthMetadataSchema, type OAuthMetadata } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   getOAuthProtectedResourceMetadataUrl,
@@ -103,7 +103,23 @@ async function fetchOAuthMetadata(
   if (response.status !== 200) {
     throw new Error(`OAuth metadata discovery returned ${response.status}.`);
   }
-  return (await response.json()) as OAuthMetadata;
+  const parsed = OAuthMetadataSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error("OAuth metadata discovery returned invalid metadata.");
+  }
+  for (const [field, value] of Object.entries(parsed.data)) {
+    if (field !== "issuer" && !field.endsWith("_endpoint") && field !== "jwks_uri") continue;
+    let url: URL;
+    try {
+      url = new URL(String(value));
+    } catch {
+      throw new Error(`OAuth metadata ${field} must be an absolute HTTPS URL.`);
+    }
+    if (typeof value !== "string" || url.protocol !== "https:") {
+      throw new Error(`OAuth metadata ${field} must use HTTPS.`);
+    }
+  }
+  return parsed.data;
 }
 
 function withScopes(client: AgendaApiClient, authInfo: AuthInfo): AgendaApiClient {
