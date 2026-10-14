@@ -17,13 +17,25 @@ jobs:
           RELEASE_EVENT: ${{ github.event_name }}
           RELEASE_REF: ${{ github.ref }}
           RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          RELEASE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          RELEASE_ACTOR: ${{ github.actor }}
+          RELEASE_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$RELEASE_EVENT" != workflow_dispatch ] ||
              [ "$RELEASE_REF" != refs/heads/main ] ||
-             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ]; then
-            echo 'A maintainer must manually dispatch a reviewed release from main and confirm @agendacraft/mcp.' >&2
+             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ] ||
+             [ "$RELEASE_REPOSITORY_PRIVATE" != false ]; then
+            echo 'An admin must manually dispatch a reviewed release from main in a public repository and confirm @agendacraft/mcp.' >&2
             exit 1
           fi
+          for actor in "$RELEASE_ACTOR" "$RELEASE_TRIGGERING_ACTOR"; do
+            if ! permission=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$actor/permission" --jq '.permission') ||
+               [ "$permission" != admin ]; then
+              echo 'Only repository admins may initiate or rerun an npm release.' >&2
+              exit 1
+            fi
+          done
   verify:
     needs: authorize
     uses: ./.github/workflows/ci.yml
