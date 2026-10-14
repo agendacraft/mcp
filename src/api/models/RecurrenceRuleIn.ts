@@ -123,7 +123,7 @@ export function RecurrenceRuleInToJSONTyped(value?: RecurrenceRuleIn | null, ign
         'count': value['count'],
         'frequency': value['frequency'],
         'interval': value['interval'],
-        'until': value['until'] == null ? undefined : ((value['until'] as any).toISOString().substring(0,10)),
+        'until': value['until'] === undefined ? undefined : value['until'] === null ? null : ((value['until'] as any).toISOString().substring(0,10)),
     };
 }
 

@@ -97,7 +97,7 @@ export function SchedulingIntentInToJSONTyped(value?: SchedulingIntentIn | null,
         'planner_id': value['plannerId'],
         'revision': value['revision'],
         'start_date': value['startDate'],
-        'start_time': value['startTime'] == null ? undefined : ((value['startTime'] as any).toISOString()),
+        'start_time': value['startTime'] === undefined ? undefined : value['startTime'] === null ? null : ((value['startTime'] as any).toISOString()),
         'timezone': value['timezone'],
     };
 }

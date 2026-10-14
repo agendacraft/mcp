@@ -93,8 +93,8 @@ export function ProjectInToJSONTyped(value?: ProjectIn | null, ignoreDiscriminat
     return {
         
         'area': value['area'],
-        'completed_at': value['completedAt'] == null ? undefined : ((value['completedAt'] as any).toISOString()),
-        'due_date': value['dueDate'] == null ? undefined : ((value['dueDate'] as any).toISOString().substring(0,10)),
+        'completed_at': value['completedAt'] === undefined ? undefined : value['completedAt'] === null ? null : ((value['completedAt'] as any).toISOString()),
+        'due_date': value['dueDate'] === undefined ? undefined : value['dueDate'] === null ? null : ((value['dueDate'] as any).toISOString().substring(0,10)),
         'id': value['id'],
         'is_inbox': value['isInbox'],
         'name': value['name'],

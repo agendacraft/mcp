@@ -150,7 +150,7 @@ export function PlannerOutToJSONTyped(value?: PlannerOut | null, ignoreDiscrimin
 
     return {
         
-        'completed_at': value['completedAt'] == null ? undefined : ((value['completedAt'] as any).toISOString()),
+        'completed_at': value['completedAt'] === undefined ? undefined : value['completedAt'] === null ? null : ((value['completedAt'] as any).toISOString()),
         'created_at': ((value['createdAt']).toISOString()),
         'id': value['id'],
         'is_complete': value['isComplete'],
@@ -161,7 +161,7 @@ export function PlannerOutToJSONTyped(value?: PlannerOut | null, ignoreDiscrimin
         'order': value['order'],
         'planner_type': value['plannerType'],
         'recurrence_rule': RecurrenceRuleSchemaToJSON(value['recurrenceRule']),
-        'start_date': value['startDate'] == null ? undefined : ((value['startDate'] as any).toISOString().substring(0,10)),
+        'start_date': value['startDate'] === undefined ? undefined : value['startDate'] === null ? null : ((value['startDate'] as any).toISOString().substring(0,10)),
         'start_time': value['startTime'],
         'updated_at': ((value['updatedAt']).toISOString()),
     };

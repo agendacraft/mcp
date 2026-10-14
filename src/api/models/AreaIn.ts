@@ -83,7 +83,7 @@ export function AreaInToJSONTyped(value?: AreaIn | null, ignoreDiscriminator: bo
     return {
         
         'color': value['color'],
-        'completed_at': value['completedAt'] == null ? undefined : ((value['completedAt'] as any).toISOString()),
+        'completed_at': value['completedAt'] === undefined ? undefined : value['completedAt'] === null ? null : ((value['completedAt'] as any).toISOString()),
         'id': value['id'],
         'name': value['name'],
         'order': value['order'],

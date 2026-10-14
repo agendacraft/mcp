@@ -96,7 +96,7 @@ export function PlannerInToJSONTyped(value?: PlannerIn | null, ignoreDiscriminat
         'name': value['name'],
         'order': value['order'],
         'recurrence_rule': RecurrenceRuleSchemaToJSON(value['recurrenceRule']),
-        'start_date': value['startDate'] == null ? undefined : ((value['startDate'] as any).toISOString().substring(0,10)),
+        'start_date': value['startDate'] === undefined ? undefined : value['startDate'] === null ? null : ((value['startDate'] as any).toISOString().substring(0,10)),
         'start_time': value['startTime'],
     };
 }

@@ -126,7 +126,7 @@ export function AreaOutToJSONTyped(value?: AreaOut | null, ignoreDiscriminator: 
     return {
         
         'color': value['color'],
-        'completed_at': value['completedAt'] == null ? undefined : ((value['completedAt'] as any).toISOString()),
+        'completed_at': value['completedAt'] === undefined ? undefined : value['completedAt'] === null ? null : ((value['completedAt'] as any).toISOString()),
         'created_at': ((value['createdAt']).toISOString()),
         'creator': value['creator'],
         'id': value['id'],

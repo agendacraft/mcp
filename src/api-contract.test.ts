@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createAgendaClient } from "./apiClient";
+import { PlannerUpdateInToJSON, TaskOutFromJSON, TaskOutToJSON } from "./api/index";
 
 const taskJson = {
   id: "task-demo",
@@ -61,10 +62,56 @@ describe("public API wire compatibility", () => {
       }) as typeof fetch,
     });
 
-    await client.updateTask("task-demo", { recurrenceRule: null, planner: null });
+    await client.updateTask("task-demo", {
+      recurrenceRule: null,
+      planner: null,
+      dueDate: null,
+      startDate: null,
+      startTime: null,
+      endDate: null,
+      endTime: null,
+    });
 
-    expect(body).toMatchObject({ recurrence_rule: null, planner: null });
+    expect(body).toEqual({
+      recurrence_rule: null,
+      planner: null,
+      due_date: null,
+      start_date: null,
+      start_time: null,
+      end_date: null,
+      end_time: null,
+    });
     expect(body).not.toHaveProperty("minutes");
+  });
+
+  it.each([
+    { startDate: null, expected: { start_date: null } },
+    { startDate: undefined, expected: {} },
+    { startDate: new Date("2026-01-22T00:00:00Z"), expected: { start_date: "2026-01-22" } },
+  ])("preserves a Time Window date update as $expected", ({ startDate, expected }) => {
+    const input = startDate === undefined ? {} : { startDate };
+
+    const wire = JSON.parse(JSON.stringify(PlannerUpdateInToJSON(input)));
+
+    expect(wire).toEqual(expected);
+  });
+
+  it("preserves cleared completion dates through a model round trip", () => {
+    const json = {
+      ...taskJson,
+      completed_at: null,
+      completed_start_date: null,
+      completed_start_time: null,
+    };
+
+    const wire = JSON.parse(JSON.stringify(TaskOutToJSON(TaskOutFromJSON(json))));
+
+    expect(wire).toMatchObject({
+      completed_at: null,
+      completed_start_date: null,
+      completed_start_time: null,
+    });
+    expect(wire).not.toHaveProperty("end_time");
   });
 
   it("parses nested sync changes and timestamps", async () => {
