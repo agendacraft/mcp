@@ -1323,6 +1323,7 @@ describe("createMcpServer", () => {
     ["update_project", { id: projectId, order: null }],
     ["update_project", { id: projectId, order: -1 }],
     ["create_area", { name: "Work", color: "blue" }],
+    ["create_area", { name: "Work", color: "" }],
     ["create_area", { name: "Work", timeWindow: "not-a-uuid" }],
     ["create_area", { name: "Work", planner: plannerId }],
     ["create_area", { name: "Work", order: -1 }],
@@ -1376,6 +1377,23 @@ describe("createMcpServer", () => {
     expect(apiClient.createPlanner).not.toHaveBeenCalled();
     expect(apiClient.updatePlanner).not.toHaveBeenCalled();
 
+    await client.close();
+  });
+
+  it("clears an area's color with the approved empty sentinel", async () => {
+    const apiClient = createStubApiClient({
+      updateArea: vi.fn(async () => ({ ...stubArea, color: "" })),
+    });
+    const client = await connectClient(apiClient);
+
+    const result = await client.callTool({
+      name: "update_area",
+      arguments: { id: areaId, color: "" },
+    });
+
+    expect(result.isError ?? false).toBe(false);
+    expect(apiClient.updateArea).toHaveBeenCalledWith(areaId, { color: "" });
+    expect(firstJsonContent(result)).toMatchObject({ item: { color: "" } });
     await client.close();
   });
 

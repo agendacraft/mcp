@@ -81,7 +81,7 @@ const areaUpdateInputSchema = z
     id: uuid,
     name: z.string().min(1).optional(),
     timeWindow: nullableUuid.describe("Assign the area to a Time Window.").optional(),
-    color: hexColor.optional(),
+    color: z.union([hexColor, z.literal("")]).optional(),
     order: order.optional(),
     completedAt: isoDateTime.nullable().optional(),
   })
