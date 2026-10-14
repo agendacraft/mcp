@@ -26,6 +26,20 @@ describe("loadSettings", () => {
     expect(settings.agendaServiceUrl).toBe("https://api.agendacraft.ai");
   });
 
+  it.each(["?tenant=x", "#section", "?", "#"])("rejects a service base URL with %s", (suffix) => {
+    expect(() => loadSettings({ AGENDA_SERVICE_URL: `https://api.example${suffix}` })).toThrow(
+      ConfigError
+    );
+  });
+
+  it("preserves a valid service path prefix for endpoint construction", () => {
+    const settings = loadSettings({ AGENDA_SERVICE_URL: "https://api.example/agenda/" });
+
+    expect(metadataUrl(settings)).toBe(
+      "https://api.example/agenda/.well-known/oauth-authorization-server"
+    );
+  });
+
   it("honours explicit client id, scopes, and timeout overrides", () => {
     const settings = loadSettings({
       ...baseEnv,
@@ -89,6 +103,17 @@ describe("loadHostedSettings", () => {
     AGENDA_MCP_INTROSPECTION_CLIENT_ID: "mcp-rs",
     AGENDA_MCP_INTROSPECTION_CLIENT_SECRET: "secret",
   };
+
+  it.each(["AGENDA_MCP_PUBLIC_URL", "AGENDA_MCP_AUTHORIZATION_SERVER_URL"])(
+    "rejects query or fragment components in the %s base URL",
+    (variable) => {
+      for (const suffix of ["?tenant=x", "#section", "?", "#"]) {
+        expect(() =>
+          loadHostedSettings({ ...hostedEnv, [variable]: `https://auth.example${suffix}` })
+        ).toThrow(ConfigError);
+      }
+    }
+  );
 
   it("applies hosted defaults", () => {
     const settings = loadHostedSettings({ ...hostedEnv });

@@ -51,6 +51,14 @@ export function metadataUrl(settings: Settings): string {
   return `${settings.agendaServiceUrl}${METADATA_PATH}`;
 }
 
+function requireBaseUrl(value: string, variable: string): string {
+  const href = new URL(value).href;
+  if (href.includes("?") || href.includes("#")) {
+    throw new ConfigError(`${variable} must not contain a query or fragment.`);
+  }
+  return value;
+}
+
 function requireServiceUrl(value: string | undefined): string {
   if (value === undefined || value.trim() === "") {
     throw new ConfigError("AGENDA_SERVICE_URL is required and must be a non-empty URL.");
@@ -68,7 +76,7 @@ function requireServiceUrl(value: string | undefined): string {
       `AGENDA_SERVICE_URL must be a valid absolute URL (got ${JSON.stringify(value)}).`
     );
   }
-  return cleaned;
+  return requireBaseUrl(cleaned, "AGENDA_SERVICE_URL");
 }
 
 /**
@@ -211,14 +219,17 @@ export function loadHostedSettings(env: Env = process.env): HostedSettings {
   const settings = loadSettings(env);
   const host = env["AGENDA_MCP_HOST"]?.trim() || "127.0.0.1";
   const port = parsePort(env["AGENDA_MCP_PORT"] ?? env["PORT"]);
-  const publicUrl = optionalUrl(
-    env["AGENDA_MCP_PUBLIC_URL"],
-    `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`
+  const publicUrl = requireBaseUrl(
+    optionalUrl(
+      env["AGENDA_MCP_PUBLIC_URL"],
+      `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`
+    ),
+    "AGENDA_MCP_PUBLIC_URL"
   );
   const resource = optionalUrl(env["AGENDA_MCP_RESOURCE"], `${publicUrl}/mcp`);
-  const authorizationServerUrl = optionalUrl(
-    env["AGENDA_MCP_AUTHORIZATION_SERVER_URL"],
-    settings.agendaServiceUrl
+  const authorizationServerUrl = requireBaseUrl(
+    optionalUrl(env["AGENDA_MCP_AUTHORIZATION_SERVER_URL"], settings.agendaServiceUrl),
+    "AGENDA_MCP_AUTHORIZATION_SERVER_URL"
   );
   return {
     ...settings,
