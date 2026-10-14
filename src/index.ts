@@ -63,33 +63,46 @@ export function buildAccessTokenProvider(
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? Date.now;
 
-  return async () => {
-    let bundle = await store.load();
+  const loadBundle = async (): Promise<TokenBundle> => {
+    const bundle = await store.load();
     if (bundle === null) {
       throw new AuthRequiredError("No saved credentials. Run `agenda-mcp login` first.");
     }
-    if (isTokenExpired(bundle, now())) {
-      if (bundle.refreshToken === null) {
-        throw new AuthRequiredError("Session expired. Run `agenda-mcp login` again.");
-      }
-      const metadata = await fetchMetadata(metadataUrl(settings), {
-        fetchImpl,
-        timeoutMs: settings.requestTimeoutMs,
-      });
-      bundle = tokenBundleWithFallbackScope(
-        await refreshAccessToken({
-          tokenEndpoint: metadata.tokenEndpoint,
-          clientId: settings.oauthClientId,
-          refreshToken: bundle.refreshToken,
-          fetchImpl,
-          timeoutMs: settings.requestTimeoutMs,
-          nowMs: now(),
-        }),
-        bundle.scope
-      );
-      await store.save(bundle);
-    }
-    return bundle.accessToken;
+    return bundle;
+  };
+
+  return async () => {
+    const cached = await loadBundle();
+    if (!isTokenExpired(cached, now())) return cached.accessToken;
+
+    return store.withRefreshLock(
+      async () => {
+        let bundle = await loadBundle();
+        if (isTokenExpired(bundle, now())) {
+          if (bundle.refreshToken === null) {
+            throw new AuthRequiredError("Session expired. Run `agenda-mcp login` again.");
+          }
+          const metadata = await fetchMetadata(metadataUrl(settings), {
+            fetchImpl,
+            timeoutMs: settings.requestTimeoutMs,
+          });
+          bundle = tokenBundleWithFallbackScope(
+            await refreshAccessToken({
+              tokenEndpoint: metadata.tokenEndpoint,
+              clientId: settings.oauthClientId,
+              refreshToken: bundle.refreshToken,
+              fetchImpl,
+              timeoutMs: settings.requestTimeoutMs,
+              nowMs: now(),
+            }),
+            bundle.scope
+          );
+          await store.save(bundle);
+        }
+        return bundle.accessToken;
+      },
+      8 * settings.requestTimeoutMs + 180_000
+    );
   };
 }
 

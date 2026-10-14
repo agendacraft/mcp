@@ -2,8 +2,8 @@
  * OAuth Authorization Code + PKCE login for the local (stdio) MCP server.
  *
  * The server performs a one-time browser-based Authorization Code + PKCE flow
- * against AgendaCraft (the public `agendacraft-mcp` client and RFC 8414
- * discovery metadata added in the backend PR #1766), caches the resulting
+ * against AgendaCraft using the public `agendacraft-mcp` client and RFC 8414
+ * discovery metadata, caches the resulting
  * tokens, and refreshes them silently. This mirrors how CLI tools such as
  * `gh auth login` authenticate: the MCP host speaks plain MCP over stdio and
  * never touches OAuth.
@@ -15,10 +15,12 @@
 
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+
+import { lock } from "proper-lockfile";
 
 import { metadataUrl, type Settings } from "./config";
 
@@ -343,9 +345,39 @@ export class TokenStore {
   }
 
   async save(bundle: TokenBundle): Promise<void> {
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, JSON.stringify(bundle), { mode: 0o600 });
-    await chmod(this.path, 0o600);
+    await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
+    const destination = await realpath(this.path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+      return resolve(this.path);
+    });
+    const temporaryPath = `${destination}.${randomBytes(16).toString("hex")}.tmp`;
+    try {
+      await writeFile(temporaryPath, JSON.stringify(bundle), { mode: 0o600, flag: "wx" });
+      await rename(temporaryPath, destination);
+    } finally {
+      await unlink(temporaryPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
+  }
+
+  async withRefreshLock<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+    const deadline = Date.now() + timeoutMs;
+    let release: (() => Promise<void>) | undefined;
+    while (release === undefined) {
+      try {
+        release = await lock(this.path, { stale: 30_000, update: 10_000 });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ELOCKED" || Date.now() >= deadline)
+          throw error;
+        await defaultSleep(Math.min(100, Math.max(0, deadline - Date.now())));
+      }
+    }
+    try {
+      return await operation();
+    } finally {
+      await release();
+    }
   }
 
   async clear(): Promise<void> {

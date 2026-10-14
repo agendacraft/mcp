@@ -79,7 +79,9 @@ node dist/index.js logout
 Logout removes the local token cache. To revoke previously granted remote access, use the
 account's authorization controls or contact AgendaCraft service support. A token cache from an
 older version without recorded scopes requires a fresh login. Expired access tokens refresh
-silently when a valid refresh token is available.
+silently when a valid refresh token is available. Refreshes coordinate across CLI processes sharing
+the same local token file, and token updates are saved atomically. Keep its adjacent `.lock`
+directory in place while any process is running; abandoned locks expire after their heartbeat stops.
 
 ### Configuration
 

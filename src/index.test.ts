@@ -132,6 +132,40 @@ describe("buildAccessTokenProvider", () => {
     expect((await store.load())?.scope).toBe("agenda:read");
   });
 
+  it("can retry a failed refresh without leaving the token file locked", async () => {
+    const tokenPath = join(mkdtempSync(join(tmpdir(), "agenda-mcp-cli-")), "token.json");
+    const store = new TokenStore(tokenPath);
+    await store.save(
+      tokenBundleFromResponse(
+        {
+          access_token: "fixture-expired",
+          refresh_token: "fixture-refresh",
+          expires_in: 1,
+        },
+        0
+      )
+    );
+    let exchanges = 0;
+    const fetchImpl = (async (input) => {
+      if (String(input).endsWith("/.well-known/oauth-authorization-server")) {
+        return jsonResponse({
+          authorization_endpoint: "https://auth.example/authorize",
+          token_endpoint: "https://auth.example/token",
+        });
+      }
+      return ++exchanges === 1
+        ? jsonResponse({ error: "fixture-unavailable" }, 503)
+        : jsonResponse({ access_token: "fixture-fresh", expires_in: 3600 });
+    }) as typeof fetch;
+    const provider = buildAccessTokenProvider(settingsWith(tokenPath), { store, fetchImpl });
+
+    await expect(provider()).rejects.toThrow(/503/);
+    await expect(provider()).resolves.toBe("fixture-fresh");
+
+    expect(exchanges).toBe(2);
+    expect((await store.load())?.refreshToken).toBe("fixture-refresh");
+  });
+
   it("throws when no token is cached", async () => {
     const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-cli-"));
     const provider = buildAccessTokenProvider(settingsWith(join(dir, "absent.json")));
