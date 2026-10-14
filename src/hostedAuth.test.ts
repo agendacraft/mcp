@@ -61,6 +61,46 @@ describe("introspectBearerToken", () => {
     expect(requests[0]?.authorization).toMatch(/^Basic /);
   });
 
+  it.each([
+    { clientId: "fixture-client", clientSecret: "fixture-secret" },
+    { clientId: "fixture:client+%", clientSecret: "fixture+%: secret" },
+    { clientId: "fixture café", clientSecret: "fixture/秘密" },
+  ])(
+    "authenticates introspection with form-significant credentials $clientId",
+    async ({ clientId, clientSecret }) => {
+      const fetchImpl = (async (_input, init) => {
+        const header = new Headers(init?.headers).get("Authorization")!;
+        const credentials = Buffer.from(header.slice("Basic ".length), "base64")
+          .toString()
+          .split(":")
+          .map((part) => decodeURIComponent(part.replace(/\+/g, " ")));
+        if (
+          credentials.length !== 2 ||
+          credentials[0] !== clientId ||
+          credentials[1] !== clientSecret
+        ) {
+          return new Response("", { status: 401 });
+        }
+        return jsonResponse({
+          active: true,
+          client_id: "fixture-public-client",
+          scope: "agenda:read",
+        });
+      }) as typeof fetch;
+
+      const result = await introspectBearerToken("fixture-token", {
+        introspectionEndpoint: "https://auth.example/introspect",
+        clientId,
+        clientSecret,
+        resource: "https://mcp.example/mcp",
+        fetchImpl,
+      });
+
+      expect(result.clientId).toBe("fixture-public-client");
+      expect(result.scopes).toEqual(["agenda:read"]);
+    }
+  );
+
   it("accepts current AgendaCraft introspection responses without audience fields", async () => {
     const fetchImpl = (async () =>
       jsonResponse({

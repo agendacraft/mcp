@@ -80,7 +80,9 @@ function validateAudience(payload: JsonObject, expectedResource: string): URL {
 }
 
 function introspectionAuthHeader(clientId: string, clientSecret: string): string {
-  return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+  const encode = (value: string) =>
+    new URLSearchParams({ credential: value }).toString().slice("credential=".length);
+  return `Basic ${Buffer.from(`${encode(clientId)}:${encode(clientSecret)}`).toString("base64")}`;
 }
 
 export async function introspectBearerToken(
