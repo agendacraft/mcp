@@ -360,7 +360,18 @@ function apiError(status: number, body: unknown = { message: "Forbidden" }): Res
       status,
       statusText: "Forbidden",
       headers: { "content-type": "application/json" },
-    })
+    }),
+    {
+      body,
+      status,
+      statusText: "Forbidden",
+      contentType: "application/json",
+      method: "GET",
+      path: "/api/v1/tasks/",
+      requestId: null,
+      retryAfter: null,
+      sanitizedUrl: "https://agenda.example/api/v1/tasks/",
+    }
   );
 }
 

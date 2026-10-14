@@ -60,9 +60,13 @@ export async function apiErrorResult(error: unknown) {
   const details =
     error instanceof ResponseError
       ? {
-          status: error.response.status,
-          statusText: toMcpSurfaceErrorStatusText(error.response.statusText),
-          body: toMcpSurfaceErrorBody(await error.response.clone().text()),
+          status: error.status,
+          statusText: toMcpSurfaceErrorStatusText(error.statusText),
+          body: toMcpSurfaceErrorBody(
+            typeof error.body === "string"
+              ? error.body
+              : (JSON.stringify(error.body) ?? "[unavailable]")
+          ),
         }
       : {
           status: null,
