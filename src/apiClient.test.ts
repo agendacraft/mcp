@@ -208,6 +208,30 @@ describe("response preservation", () => {
     }
   );
 
+  it("releases the middleware clone while leaving the caller's body readable", async () => {
+    const original = new Response("caller payload");
+    const clone = original.clone();
+    const middleware = createRetryAuditMiddleware({
+      fetchImpl: fetch,
+      maxRetries: 0,
+      maxRetryDelayMs: 30_000,
+      sleep: async () => {},
+      now: () => 0,
+      audit: () => {},
+    });
+
+    await middleware.post!({
+      fetch,
+      url: `${baseUrl}/api/v1/tasks/`,
+      init: {},
+      response: clone,
+    });
+
+    expect(clone.bodyUsed).toBe(true);
+    expect(await original.text()).toBe("caller payload");
+    expect(await clone.body!.getReader().read()).toEqual({ done: true, value: undefined });
+  });
+
   it("returns the newly fetched response after a retry", async () => {
     const replacement = jsonResponse(userJson);
     const middleware = createRetryAuditMiddleware({

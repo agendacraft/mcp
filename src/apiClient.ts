@@ -170,6 +170,8 @@ export function createRetryAuditMiddleware(deps: RetryAuditDeps): Middleware {
       return undefined;
     },
     async post(context) {
+      // BaseAPI supplies a clone; release its tee branch after inspecting the headers.
+      void context.response.body?.cancel().catch(() => undefined);
       let response = context.response;
       let attempt = 0;
       while (response.status === 429 && attempt < deps.maxRetries) {
