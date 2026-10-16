@@ -1,0 +1,17 @@
+name: Feature request
+description: Explain a user outcome and the needed capability.
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: User outcome
+      description: What are you trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: Proposed capability
+      description: Describe the tools, scopes, or host behavior involved, using synthetic examples.
+    validations:
+      required: true

@@ -1,0 +1,11 @@
+{
+  "apiPackage": "apis",
+  "modelPackage": "models",
+  "apiPropertyNaming": "camelCase",
+  "modelPropertyNaming": "camelCase",
+  "paramNaming": "camelCase",
+  "supportsES6": true,
+  "withNodeImports": true,
+  "withSeparateModelsAndApi": true,
+  "npmName": "@agendacraft/mcp-api"
+}

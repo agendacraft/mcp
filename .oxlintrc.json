@@ -1,0 +1,21 @@
+{
+  "plugins": ["typescript", "promise", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": ["src/api/**", "dist/**", "node_modules/**", ".cache/**"],
+  "rules": {
+    "no-console": "warn",
+    "prefer-const": "error",
+    "no-var": "error",
+    "no-undef": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "no-conditional-expect": "off"
+      }
+    }
+  ]
+}
