@@ -45,6 +45,8 @@ import {
   type UserOut,
 } from "./api/index";
 
+import { parseRetryAfterMs } from "./retryAfter";
+
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 
@@ -116,19 +118,21 @@ export interface CreateAgendaClientOptions {
   readonly audit?: (entry: AuditEntry) => void;
 }
 
-function parseRetryAfterMs(value: string | null, fallbackMs: number): number {
-  if (value === null) {
-    return fallbackMs;
-  }
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return fallbackMs;
-  }
-  return seconds * 1000;
-}
-
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function auditUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  } catch {
+    return "[invalid-url]";
+  }
 }
 
 function defaultAudit(entry: AuditEntry): void {
@@ -170,7 +174,7 @@ export function createRetryAuditMiddleware(deps: RetryAuditDeps): Middleware {
       let attempt = 0;
       while (response.status === 429 && attempt < deps.maxRetries) {
         const delayMs = Math.min(
-          parseRetryAfterMs(response.headers.get("retry-after"), deps.maxRetryDelayMs),
+          parseRetryAfterMs(response.headers.get("retry-after"), deps.maxRetryDelayMs, deps.now()),
           deps.maxRetryDelayMs
         );
         await deps.sleep(delayMs);
@@ -180,11 +184,11 @@ export function createRetryAuditMiddleware(deps: RetryAuditDeps): Middleware {
       const start = startTimes.get(context.init);
       deps.audit({
         method: context.init.method ?? "GET",
-        url: context.url,
+        url: auditUrl(context.url),
         status: response.status,
         durationMs: start === undefined ? null : deps.now() - start,
       });
-      return response;
+      return attempt > 0 ? response : undefined;
     },
   };
 }

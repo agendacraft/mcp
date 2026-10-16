@@ -24,6 +24,8 @@ import { lock } from "proper-lockfile";
 
 import { metadataUrl, type Settings } from "./config";
 
+import { parseRetryAfterMs } from "./retryAfter";
+
 const TOKEN_EXPIRY_LEEWAY_MS = 60_000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
@@ -212,17 +214,6 @@ interface BrowserCommand {
   readonly args: readonly string[];
 }
 
-function parseRetryAfterMs(value: string | null, fallbackMs: number): number {
-  if (value === null) {
-    return fallbackMs;
-  }
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return fallbackMs;
-  }
-  return seconds * 1000;
-}
-
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -256,7 +247,7 @@ export async function fetchWithRetry(
   let attempt = 0;
   while (response.status === 429 && attempt < maxRetries) {
     const delayMs = Math.min(
-      parseRetryAfterMs(response.headers.get("retry-after"), maxRetryDelayMs),
+      parseRetryAfterMs(response.headers.get("retry-after"), maxRetryDelayMs, Date.now()),
       maxRetryDelayMs
     );
     await sleep(delayMs);
@@ -281,6 +272,54 @@ export async function fetchMetadata(
   return metadataFromPayload((await response.json()) as JsonObject);
 }
 
+const OAUTH_ERROR_CODES = new Set([
+  "invalid_request",
+  "invalid_client",
+  "invalid_grant",
+  "unauthorized_client",
+  "unsupported_grant_type",
+  "invalid_scope",
+  "server_error",
+  "temporarily_unavailable",
+]);
+
+/** Provider descriptions may echo credentials; retain only recognized protocol codes. */
+async function readOAuthErrorCode(response: Response): Promise<string | undefined> {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    reader = response.body?.getReader();
+    if (!reader) return undefined;
+    const bodyReader = reader;
+    const read = async (): Promise<string | undefined> => {
+      const buffer = new Uint8Array(4_096);
+      let size = 0;
+      while (true) {
+        const { done, value } = await bodyReader.read();
+        if (done) break;
+        if (value.byteLength > buffer.byteLength - size) return undefined;
+        buffer.set(value, size);
+        size += value.byteLength;
+      }
+      const payload: unknown = JSON.parse(new TextDecoder().decode(buffer.subarray(0, size)));
+      if (payload === null || typeof payload !== "object") return undefined;
+      const code = (payload as JsonObject)["error"];
+      return typeof code === "string" && OAUTH_ERROR_CODES.has(code) ? code : undefined;
+    };
+    return await Promise.race([
+      read(),
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), 3_000);
+      }),
+    ]);
+  } catch {
+    return undefined;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    void reader?.cancel().catch(() => undefined);
+  }
+}
+
 async function requestToken(
   tokenEndpoint: string,
   data: Record<string, string>,
@@ -296,8 +335,8 @@ async function requestToken(
   }
   const response = await fetchWithRetry(tokenEndpoint, init, options);
   if (response.status !== 200) {
-    const text = await response.text();
-    throw new OAuthError(`Token endpoint returned ${response.status}: ${text}`);
+    const code = await readOAuthErrorCode(response);
+    throw new OAuthError(`Token endpoint returned ${response.status}${code ? `: ${code}` : "."}`);
   }
   return tokenBundleFromResponse((await response.json()) as JsonObject, options.nowMs);
 }
