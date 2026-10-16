@@ -1,4 +1,4 @@
-name: Verify
+name: Verify MCP package
 on:
   push:
   pull_request:
