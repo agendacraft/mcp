@@ -2,12 +2,10 @@
  * Authenticated agenda-service client, built on the generated
  * `./api/index`.
  *
- * Rather than hand-rolling an HTTP client, this wraps the OpenAPI-generated
- * `Configuration`: the OAuth bearer token is supplied via the `accessToken`
- * callback, and the native `Middleware` seam provides `429`/`Retry-After`
- * backoff plus structured audit logging (the two behaviours the Python
- * `client.py` implemented by hand). Responses come back as typed, camelCase
- * models — no manual JSON parsing.
+ * The generated client supplies the OAuth bearer token and typed camelCase models.
+ * Its fetch adapter applies bounded `429`/`Retry-After` backoff and audit logging
+ * before the generated response handling, so discarded response bodies can be
+ * cancelled without creating unread response clones.
  *
  * This is the adapter boundary for agenda-service names: the generated client
  * still exposes Planner models and endpoint parameters, while the MCP surface
@@ -29,7 +27,6 @@ import {
   type ListPlannersRequest,
   type ListProjectsRequest,
   type ListTasksRequest,
-  type Middleware,
   type PlannerBlockOut,
   type PlannerIn,
   type PlannerOut,
@@ -157,42 +154,29 @@ interface RetryAuditDeps {
   readonly audit: (entry: AuditEntry) => void;
 }
 
-/**
- * Middleware that retries `429` responses with `Retry-After` backoff and emits a
- * structured audit line per request. Retries re-issue the request with the raw
- * fetch (not `context.fetch`) to avoid recursively re-running the middleware.
- */
-export function createRetryAuditMiddleware(deps: RetryAuditDeps): Middleware {
-  const startTimes = new WeakMap<object, number>();
-  return {
-    async pre(context) {
-      startTimes.set(context.init, deps.now());
-      return undefined;
-    },
-    async post(context) {
-      // BaseAPI supplies a clone; release its tee branch after inspecting the headers.
-      void context.response.body?.cancel().catch(() => undefined);
-      let response = context.response;
-      let attempt = 0;
-      while (response.status === 429 && attempt < deps.maxRetries) {
-        const delayMs = Math.min(
-          parseRetryAfterMs(response.headers.get("retry-after"), deps.maxRetryDelayMs, deps.now()),
-          deps.maxRetryDelayMs
-        );
-        await deps.sleep(delayMs);
-        attempt += 1;
-        response = await deps.fetchImpl(context.url, context.init);
-      }
-      const start = startTimes.get(context.init);
-      deps.audit({
-        method: context.init.method ?? "GET",
-        url: auditUrl(context.url),
-        status: response.status,
-        durationMs: start === undefined ? null : deps.now() - start,
-      });
-      return attempt > 0 ? response : undefined;
-    },
-  };
+function createRetryAuditedFetch(deps: RetryAuditDeps): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const start = deps.now();
+    let response = await deps.fetchImpl(input, init);
+    let attempt = 0;
+    while (response.status === 429 && attempt < deps.maxRetries) {
+      const delayMs = Math.min(
+        parseRetryAfterMs(response.headers.get("retry-after"), deps.maxRetryDelayMs, deps.now()),
+        deps.maxRetryDelayMs
+      );
+      void response.body?.cancel().catch(() => undefined);
+      await deps.sleep(delayMs);
+      attempt += 1;
+      response = await deps.fetchImpl(input, init);
+    }
+    deps.audit({
+      method: init?.method ?? "GET",
+      url: auditUrl(String(input)),
+      status: response.status,
+      durationMs: deps.now() - start,
+    });
+    return response;
+  }) as typeof fetch;
 }
 
 /** Build an {@link AgendaApiClient} bound to an OAuth access-token provider. */
@@ -203,7 +187,7 @@ export function createAgendaClient(options: CreateAgendaClientOptions): AgendaAp
       ? withTimeout(baseFetch, options.requestTimeoutMs)
       : baseFetch;
 
-  const middleware = createRetryAuditMiddleware({
+  const auditedFetch = createRetryAuditedFetch({
     fetchImpl: effectiveFetch,
     maxRetries: options.maxRetries ?? DEFAULT_MAX_RETRIES,
     maxRetryDelayMs: options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS,
@@ -215,8 +199,7 @@ export function createAgendaClient(options: CreateAgendaClientOptions): AgendaAp
   const configuration = new Configuration({
     basePath: options.baseUrl,
     accessToken: async () => options.accessTokenProvider(),
-    fetchApi: effectiveFetch,
-    middleware: [middleware],
+    fetchApi: auditedFetch,
   });
 
   const authApi = new AuthApi(configuration);

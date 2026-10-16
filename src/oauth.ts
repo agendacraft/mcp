@@ -250,6 +250,7 @@ export async function fetchWithRetry(
       parseRetryAfterMs(response.headers.get("retry-after"), maxRetryDelayMs, Date.now()),
       maxRetryDelayMs
     );
+    void response.body?.cancel().catch(() => undefined);
     await sleep(delayMs);
     attempt += 1;
     response = await fetchImpl(url, initForAttempt());

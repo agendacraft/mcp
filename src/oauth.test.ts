@@ -731,3 +731,41 @@ describe("OAuth error privacy and limits", () => {
     await expect(refreshWithResponse(response)).rejects.toThrow(/^Token endpoint returned 502\.$/);
   });
 });
+
+describe("OAuth throttled response cleanup", () => {
+  it("releases every discarded body before waiting", async () => {
+    const cancelled: number[] = [];
+    const responses = [0, 1].map(
+      (index) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("throttled"));
+            },
+            cancel() {
+              cancelled.push(index);
+            },
+          }),
+          { status: 429, headers: { "Retry-After": "0" } }
+        )
+    );
+    responses.push(jsonResponse({ access_token: "fixture-access" }));
+    let attempt = 0;
+    let waits = 0;
+
+    const bundle = await refreshAccessToken({
+      tokenEndpoint: metadata.tokenEndpoint,
+      clientId: "fixture-client",
+      refreshToken: "fixture-refresh",
+      fetchImpl: (async () => responses[attempt++]!) as typeof fetch,
+      nowMs: 0,
+      sleep: async () => {
+        waits++;
+        expect(cancelled).toEqual(waits === 1 ? [0] : [0, 1]);
+      },
+    });
+
+    expect(bundle.accessToken).toBe("fixture-access");
+    expect(cancelled).toEqual([0, 1]);
+  });
+});

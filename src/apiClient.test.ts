@@ -1,4 +1,6 @@
-import { createAgendaClient, createRetryAuditMiddleware, type AuditEntry } from "./apiClient";
+import { createAgendaClient, type AuditEntry } from "./apiClient";
+
+import { ResponseError } from "./api/index";
 
 const baseUrl = "https://api.agendacraft.ai";
 
@@ -184,72 +186,77 @@ describe("API throttle deadlines", () => {
 });
 
 describe("response preservation", () => {
-  it.each([200, 429])(
-    "leaves an unretried HTTP %s response with the generated client",
-    async (status) => {
-      const middleware = createRetryAuditMiddleware({
-        fetchImpl: fetch,
-        maxRetries: 0,
-        maxRetryDelayMs: 30_000,
-        sleep: async () => {},
-        now: () => 0,
-        audit: () => {},
-      });
-      const response = new Response("fixture", { status });
-
-      const replacement = await middleware.post!({
-        fetch,
-        url: `${baseUrl}/api/v1/tasks/`,
-        init: {},
-        response,
-      });
-
-      expect(replacement).toBeUndefined();
-    }
-  );
-
-  it("releases the middleware clone while leaving the caller's body readable", async () => {
-    const original = new Response("caller payload");
-    const clone = original.clone();
-    const middleware = createRetryAuditMiddleware({
-      fetchImpl: fetch,
-      maxRetries: 0,
-      maxRetryDelayMs: 30_000,
-      sleep: async () => {},
-      now: () => 0,
+  it("delivers the successful fetch body without creating a middleware clone", async () => {
+    const response = jsonResponse(userJson);
+    const clone = vi.spyOn(response, "clone");
+    const client = createAgendaClient({
+      baseUrl,
+      accessTokenProvider: async () => "fixture-token",
+      fetchImpl: (async () => response) as typeof fetch,
       audit: () => {},
     });
 
-    await middleware.post!({
-      fetch,
-      url: `${baseUrl}/api/v1/tasks/`,
-      init: {},
-      response: clone,
-    });
+    const user = await client.getMe();
 
-    expect(clone.bodyUsed).toBe(true);
-    expect(await original.text()).toBe("caller payload");
-    expect(await clone.body!.getReader().read()).toEqual({ done: true, value: undefined });
+    expect(user.id).toBe("u1");
+    expect(response.bodyUsed).toBe(true);
+    expect(clone).not.toHaveBeenCalled();
   });
 
-  it("returns the newly fetched response after a retry", async () => {
-    const replacement = jsonResponse(userJson);
-    const middleware = createRetryAuditMiddleware({
-      fetchImpl: (async () => replacement) as typeof fetch,
-      maxRetries: 1,
-      maxRetryDelayMs: 30_000,
-      sleep: async () => {},
-      now: () => 0,
+  it("preserves the final throttle response when retries are disabled", async () => {
+    const response = jsonResponse({ code: "throttled" }, 429);
+    const client = createAgendaClient({
+      baseUrl,
+      accessTokenProvider: async () => "fixture-token",
+      maxRetries: 0,
+      fetchImpl: (async () => response) as typeof fetch,
       audit: () => {},
     });
 
-    const result = await middleware.post!({
-      fetch,
-      url: `${baseUrl}/api/v1/auth/me`,
-      init: {},
-      response: new Response(null, { status: 429 }),
+    const error = await client.getMe().catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(ResponseError);
+    expect((error as ResponseError).response).toBe(response);
+    expect(response.bodyUsed).toBe(false);
+  });
+});
+
+describe("throttled response cleanup", () => {
+  it("releases every discarded body before waiting and preserves the success body", async () => {
+    const cancelled: number[] = [];
+    const responses = [0, 1].map(
+      (index) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("throttled"));
+            },
+            cancel() {
+              cancelled.push(index);
+            },
+          }),
+          { status: 429, headers: { "Retry-After": "0" } }
+        )
+    );
+    const success = jsonResponse(userJson);
+    responses.push(success);
+    let attempt = 0;
+    let waits = 0;
+    const client = createAgendaClient({
+      baseUrl,
+      accessTokenProvider: async () => "fixture-token",
+      fetchImpl: (async () => responses[attempt++]!) as typeof fetch,
+      audit: () => {},
+      sleep: async () => {
+        waits++;
+        expect(cancelled).toEqual(waits === 1 ? [0] : [0, 1]);
+      },
     });
 
-    expect(result).toBe(replacement);
+    const result = await client.getMe();
+
+    expect(result.id).toBe("u1");
+    expect(cancelled).toEqual([0, 1]);
+    expect(success.bodyUsed).toBe(true);
   });
 });
