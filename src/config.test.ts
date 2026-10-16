@@ -182,3 +182,24 @@ describe("resolveTokenPath", () => {
     );
   });
 });
+
+describe("request timeout timer limits", () => {
+  it.each(["0.0001", "2147483.648", "4294967.296", "1e308"])(
+    "rejects unrepresentable timeout %s at startup",
+    (value) => {
+      expect(() => loadSettings({ ...baseEnv, AGENDA_MCP_REQUEST_TIMEOUT: value })).toThrow(
+        ConfigError
+      );
+    }
+  );
+
+  it.each(["0.001", "1.25", "30", "2147483.647"])(
+    "accepts millisecond-precision timeout %s",
+    (value) => {
+      const settings = loadSettings({ ...baseEnv, AGENDA_MCP_REQUEST_TIMEOUT: value });
+
+      expect(settings.requestTimeoutMs).toBe(Number(value) * 1000);
+      expect(() => AbortSignal.timeout(settings.requestTimeoutMs)).not.toThrow();
+    }
+  );
+});

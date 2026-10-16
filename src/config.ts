@@ -105,7 +105,13 @@ function parseTimeoutMs(value: string | undefined): number {
       `AGENDA_MCP_REQUEST_TIMEOUT must be positive (got ${JSON.stringify(value)}).`
     );
   }
-  return seconds * 1000;
+  const timeoutMs = seconds * 1000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs > 2_147_483_647) {
+    throw new ConfigError(
+      "AGENDA_MCP_REQUEST_TIMEOUT must resolve to 1..2147483647 whole milliseconds."
+    );
+  }
+  return timeoutMs;
 }
 
 function optionalUrl(value: string | undefined, fallback: string): string {

@@ -87,13 +87,13 @@ directory in place while any process is running; abandoned locks expire after th
 
 ### Configuration
 
-| Variable                     | Default / purpose                                                             |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `AGENDA_SERVICE_URL`         | Required API origin. Use `https://api.agendacraft.ai` for the hosted service. |
-| `AGENDA_MCP_OAUTH_CLIENT_ID` | Public client identifier `agendacraft-mcp`.                                   |
-| `AGENDA_MCP_OAUTH_SCOPES`    | `agenda:read agenda:write profile:read`.                                      |
-| `AGENDA_MCP_REQUEST_TIMEOUT` | Request timeout in seconds, default `30`.                                     |
-| `AGENDA_MCP_TOKEN_PATH`      | Optional token-file override.                                                 |
+| Variable                     | Default / purpose                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `AGENDA_SERVICE_URL`         | Required API origin. Use `https://api.agendacraft.ai` for the hosted service.                        |
+| `AGENDA_MCP_OAUTH_CLIENT_ID` | Public client identifier `agendacraft-mcp`.                                                          |
+| `AGENDA_MCP_OAUTH_SCOPES`    | `agenda:read agenda:write profile:read`.                                                             |
+| `AGENDA_MCP_REQUEST_TIMEOUT` | Request timeout in seconds, default `30`. Whole milliseconds from `1` to `2147483647` are supported. |
+| `AGENDA_MCP_TOKEN_PATH`      | Optional token-file override.                                                                        |
 
 Requests have explicit timeouts. The client retries `429` responses with bounded `Retry-After`
 backoff; other API errors use the shared MCP error envelope. A missing service URL fails at
