@@ -1,0 +1,71 @@
+name: Publish reviewed npm package
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Enter @agendacraft/mcp to confirm a reviewed release
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - &release-authorization
+        name: Require explicit maintainer release
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          RELEASE_ACTOR: ${{ github.actor }}
+          RELEASE_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$RELEASE_EVENT" != workflow_dispatch ] ||
+             [ "$RELEASE_REF" != refs/heads/main ] ||
+             [ "$RELEASE_CONFIRMATION" != '@agendacraft/mcp' ]; then
+            echo 'An admin must manually dispatch a reviewed release from main in a public repository and confirm @agendacraft/mcp.' >&2
+            exit 1
+          fi
+          if ! private=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private') ||
+             [ "$private" != false ]; then
+            echo 'npm provenance requires a currently public source repository.' >&2
+            exit 1
+          fi
+          for actor in "$RELEASE_ACTOR" "$RELEASE_TRIGGERING_ACTOR"; do
+            if ! permission=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$actor/permission" --jq '.permission') ||
+               [ "$permission" != admin ]; then
+              echo 'Only repository admins may initiate or rerun an npm release.' >&2
+              exit 1
+            fi
+          done
+  verify:
+    needs: authorize
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Require security reporting channel
+        run: |
+          if grep -q 'TODO for the captain' SECURITY.md; then
+            echo 'Complete and verify the private reporting channel before releasing.' >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global pnpm@11.2.2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - *release-authorization
+      - run: npm publish --provenance --access public

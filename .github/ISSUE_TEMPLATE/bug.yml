@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible software problem using sanitized examples.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md privately. Never share tokens, account exports, or real task data."
+  - type: textarea
+    id: versions
+    attributes:
+      label: Package, Node, operating system, and MCP host versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic data. Include the command or transport and granted scope names.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+      description: Include sanitized errors. Remove credentials, personal identifiers, and sensitive URLs.
+    validations:
+      required: true
