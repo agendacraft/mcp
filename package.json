@@ -46,7 +46,7 @@
     "notices": "node scripts/third-party-notices.mjs"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/express": "^5.0.6",
     "@types/node": "^24.0.0",
     "@types/proper-lockfile": "^4.1.4",
