@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdtempSync, statSync, symlinkSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -411,6 +411,32 @@ describe("TokenStore", () => {
     expect(raw.accessToken).toBe("at");
 
     await store.clear();
+    expect(await store.load()).toBeNull();
+  });
+
+  it("clears the canonical credentials when the configured cache is a symlink", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-store-"));
+    const targetPath = join(dir, "target.json");
+    const aliasPath = join(dir, "alias.json");
+    const target = new TokenStore(targetPath);
+    const alias = new TokenStore(aliasPath);
+    await target.save(tokenBundleFromResponse({ access_token: "fixture-token" }, 0));
+    symlinkSync(targetPath, aliasPath);
+
+    await alias.clear();
+
+    expect(await target.load()).toBeNull();
+    expect(await alias.load()).toBeNull();
+    await alias.clear();
+  });
+
+  it("allows repeated logout when the cache or its parent directory is absent", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-store-"));
+    const store = new TokenStore(join(dir, "missing", "token.json"));
+
+    await store.clear();
+    await store.clear();
+
     expect(await store.load()).toBeNull();
   });
 

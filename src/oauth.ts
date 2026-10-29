@@ -27,6 +27,7 @@ import { metadataUrl, type Settings } from "./config";
 import { parseRetryAfterMs } from "./retryAfter";
 
 const TOKEN_EXPIRY_LEEWAY_MS = 60_000;
+const LOGOUT_LOCK_TIMEOUT_MS = 420_000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 
@@ -437,12 +438,16 @@ export class TokenStore {
     }
   }
 
-  async withRefreshLock<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+  async withRefreshLock<T>(
+    operation: (target: string) => Promise<T>,
+    timeoutMs: number
+  ): Promise<T> {
+    const target = await realpath(this.path);
     const deadline = Date.now() + timeoutMs;
     let release: (() => Promise<void>) | undefined;
     while (release === undefined) {
       try {
-        release = await lock(this.path, { stale: 30_000, update: 10_000 });
+        release = await lock(target, { stale: 30_000, update: 10_000 });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ELOCKED" || Date.now() >= deadline)
           throw error;
@@ -450,7 +455,7 @@ export class TokenStore {
       }
     }
     try {
-      return await operation();
+      return await operation(target);
     } finally {
       await release();
     }
@@ -458,7 +463,7 @@ export class TokenStore {
 
   async clear(): Promise<void> {
     try {
-      await unlink(this.path);
+      await this.withRefreshLock((target) => unlink(target), LOGOUT_LOCK_TIMEOUT_MS);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
