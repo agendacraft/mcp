@@ -27,6 +27,7 @@ import { metadataUrl, type Settings } from "./config";
 import { parseRetryAfterMs } from "./retryAfter";
 
 const TOKEN_EXPIRY_LEEWAY_MS = 60_000;
+const LOGOUT_LOCK_TIMEOUT_MS = 420_000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 
@@ -458,7 +459,7 @@ export class TokenStore {
 
   async clear(): Promise<void> {
     try {
-      await unlink(this.path);
+      await this.withRefreshLock(() => unlink(this.path), LOGOUT_LOCK_TIMEOUT_MS);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;

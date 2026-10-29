@@ -32,6 +32,15 @@ describe("loadSettings", () => {
     );
   });
 
+  it.each(["user:pass", "user", ":pass", "user%40name:p%3Ass"])(
+    "rejects service URL userinfo %s without echoing credentials",
+    (userinfo) => {
+      expect(() => loadSettings({ AGENDA_SERVICE_URL: `https://${userinfo}@api.example` })).toThrow(
+        "AGENDA_SERVICE_URL must not contain credentials."
+      );
+    }
+  );
+
   it("preserves a valid service path prefix for endpoint construction", () => {
     const settings = loadSettings({ AGENDA_SERVICE_URL: "https://api.example/agenda/" });
 
@@ -155,6 +164,24 @@ describe("loadHostedSettings", () => {
     expect(settings.allowedHosts).toEqual(["mcp.agendacraft.ai", "localhost"]);
     expect(settings.allowedOrigins).toEqual(["https://mcp.agendacraft.ai", "https://claude.ai"]);
   });
+
+  it("preserves registered introspection credentials exactly", () => {
+    const settings = loadHostedSettings({
+      ...hostedEnv,
+      AGENDA_MCP_INTROSPECTION_CLIENT_ID: " client id ",
+      AGENDA_MCP_INTROSPECTION_CLIENT_SECRET: "\t secret value \n",
+    });
+
+    expect(settings.introspectionClientId).toBe(" client id ");
+    expect(settings.introspectionClientSecret).toBe("\t secret value \n");
+  });
+
+  it.each(["AGENDA_MCP_INTROSPECTION_CLIENT_ID", "AGENDA_MCP_INTROSPECTION_CLIENT_SECRET"])(
+    "rejects blank %s",
+    (key) => {
+      expect(() => loadHostedSettings({ ...hostedEnv, [key]: " \t\n" })).toThrow(ConfigError);
+    }
+  );
 
   it("requires introspection credentials for hosted mode", () => {
     expect(() => loadHostedSettings({ ...baseEnv })).toThrow(ConfigError);

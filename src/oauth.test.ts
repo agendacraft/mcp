@@ -414,6 +414,16 @@ describe("TokenStore", () => {
     expect(await store.load()).toBeNull();
   });
 
+  it("allows repeated logout when the cache or its parent directory is absent", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-store-"));
+    const store = new TokenStore(join(dir, "missing", "token.json"));
+
+    await store.clear();
+    await store.clear();
+
+    expect(await store.load()).toBeNull();
+  });
+
   it("returns null when no token file exists", async () => {
     const dir = mkdtempSync(join(tmpdir(), "agenda-mcp-store-"));
     expect(await new TokenStore(join(dir, "absent.json")).load()).toBeNull();

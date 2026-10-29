@@ -19,7 +19,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function fixture() {
+async function fixture(beforeRefresh?: () => Promise<void>) {
   const tokenPath = join(mkdtempSync(join(tmpdir(), "mcp-refresh-")), "token.json");
   const store = new TokenStore(tokenPath);
   await store.save(
@@ -50,7 +50,8 @@ async function fixture() {
     req.on("data", (chunk) => {
       body += chunk;
     });
-    req.on("end", () => {
+    req.on("end", async () => {
+      await beforeRefresh?.();
       exchanged.push(new URLSearchParams(body).get("refresh_token")!);
       if (exchanged.length === 1) {
         res.end(
@@ -177,6 +178,36 @@ describe("shared token refresh", () => {
       await close(server);
     }
   });
+
+  it("keeps credentials cleared after an independent process finishes an in-flight refresh", async () => {
+    const refreshing = deferred<void>();
+    const releaseRefresh = deferred<void>();
+    const { settings, store, server } = await fixture(async () => {
+      refreshing.resolve();
+      await releaseRefresh.promise;
+    });
+    const client = tokenProcess(settings);
+    const outcome = Promise.allSettled([client.finished]);
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await client.ready;
+      client.child.send("start");
+      await refreshing.promise;
+
+      // Keep the refresh in flight while logout attempts to remove the cache.
+      const logout = new TokenStore(settings.tokenPath).clear();
+      releaseTimer = setTimeout(() => releaseRefresh.resolve(), 200);
+      await logout;
+      expect(await outcome).toEqual([{ status: "fulfilled", value: "fixture-fresh" }]);
+
+      expect(await store.load()).toBeNull();
+    } finally {
+      clearTimeout(releaseTimer);
+      releaseRefresh.resolve();
+      if (client.child.exitCode === null) client.child.kill();
+      await close(server);
+    }
+  }, 15_000);
 
   it("shares one rotated token between independent CLI processes", async () => {
     const { settings, store, server, exchanged } = await fixture();

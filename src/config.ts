@@ -52,7 +52,11 @@ export function metadataUrl(settings: Settings): string {
 }
 
 function requireBaseUrl(value: string, variable: string): string {
-  const href = new URL(value).href;
+  const parsed = new URL(value);
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new ConfigError(`${variable} must not contain credentials.`);
+  }
+  const href = parsed.href;
   if (href.includes("?") || href.includes("#")) {
     throw new ConfigError(`${variable} must not contain a query or fragment.`);
   }
@@ -143,8 +147,8 @@ function parsePort(value: string | undefined): number {
 }
 
 function requiredHostedSecret(env: Env, key: string): string {
-  const value = env[key]?.trim();
-  if (!value) {
+  const value = env[key];
+  if (value === undefined || value.trim() === "") {
     throw new ConfigError(`${key} is required for hosted HTTP mode.`);
   }
   return value;
