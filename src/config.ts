@@ -69,16 +69,12 @@ function requireServiceUrl(value: string | undefined): string {
   }
   const cleaned = value.trim().replace(/\/+$/, "");
   if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
-    throw new ConfigError(
-      `AGENDA_SERVICE_URL must start with http:// or https:// (got ${JSON.stringify(value)}).`
-    );
+    throw new ConfigError("AGENDA_SERVICE_URL must start with http:// or https://.");
   }
   try {
     new URL(cleaned);
   } catch {
-    throw new ConfigError(
-      `AGENDA_SERVICE_URL must be a valid absolute URL (got ${JSON.stringify(value)}).`
-    );
+    throw new ConfigError("AGENDA_SERVICE_URL must be a valid absolute URL.");
   }
   return requireBaseUrl(cleaned, "AGENDA_SERVICE_URL");
 }
@@ -122,12 +118,12 @@ function optionalUrl(value: string | undefined, fallback: string): string {
   const raw = value?.trim() || fallback;
   const cleaned = raw.replace(/\/+$/, "");
   if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
-    throw new ConfigError(`Hosted MCP URL must start with http:// or https:// (got ${raw}).`);
+    throw new ConfigError("Hosted MCP URL must start with http:// or https://.");
   }
   try {
     new URL(cleaned);
   } catch {
-    throw new ConfigError(`Hosted MCP URL must be a valid absolute URL (got ${raw}).`);
+    throw new ConfigError("Hosted MCP URL must be a valid absolute URL.");
   }
   return cleaned;
 }

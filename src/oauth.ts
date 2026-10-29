@@ -438,12 +438,16 @@ export class TokenStore {
     }
   }
 
-  async withRefreshLock<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+  async withRefreshLock<T>(
+    operation: (target: string) => Promise<T>,
+    timeoutMs: number
+  ): Promise<T> {
+    const target = await realpath(this.path);
     const deadline = Date.now() + timeoutMs;
     let release: (() => Promise<void>) | undefined;
     while (release === undefined) {
       try {
-        release = await lock(this.path, { stale: 30_000, update: 10_000 });
+        release = await lock(target, { stale: 30_000, update: 10_000 });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ELOCKED" || Date.now() >= deadline)
           throw error;
@@ -451,7 +455,7 @@ export class TokenStore {
       }
     }
     try {
-      return await operation();
+      return await operation(target);
     } finally {
       await release();
     }
@@ -459,7 +463,7 @@ export class TokenStore {
 
   async clear(): Promise<void> {
     try {
-      await this.withRefreshLock(() => unlink(this.path), LOGOUT_LOCK_TIMEOUT_MS);
+      await this.withRefreshLock((target) => unlink(target), LOGOUT_LOCK_TIMEOUT_MS);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
